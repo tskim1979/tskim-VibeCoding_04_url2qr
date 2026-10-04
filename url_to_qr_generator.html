@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL2QR Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QR Code generation library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Custom font import */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* Smooth transition for moving input section */
+        .smooth-transition {
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Hover effect for clickable QR Code */
+        .qr-hover-container {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .qr-hover-container:hover {
+            transform: scale(1.03);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden text-slate-800 bg-slate-50">
+
+    <!-- Top Header -->
+    <header class="w-full p-4 md:p-6 flex items-center justify-between z-20">
+        <div class="flex items-center gap-3">
+            <!-- Logo with fallback to embedded SVG matching URL2QR design -->
+            <a href="#" onclick="resetView(event)" class="block focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-lg">
+                <img src="img/logo.png" 
+                     alt="URL2QR Logo" 
+                     class="h-10 md:h-12 object-contain rounded shadow-sm"
+                     onerror="this.onerror=null; this.parentNode.innerHTML=`
+                        <div class='bg-[#FFC107] text-black font-extrabold text-xl md:text-2xl px-4 py-2 rounded-lg shadow-md flex items-center tracking-widest uppercase border-2 border-amber-500 hover:bg-amber-400 transition-colors cursor-pointer select-none'>
+                            <span class='text-2xl mr-1'>⚡</span>URL2QR
+                        </div>
+                     `;">
+            </a>
+        </div>
+        <div class="text-xs md:text-sm font-medium text-slate-500">
+            QR Code Helper Tool
+        </div>
+    </header>
+
+    <!-- Main Display Canvas -->
+    <main class="flex-1 flex flex-col items-center justify-center p-4 relative min-h-[420px]">
+        
+        <!-- Center QR Code Display Container (Hidden initially) -->
+        <div id="qrContainerWrapper" class="opacity-0 scale-90 pointer-events-none transition-all duration-700 flex flex-col items-center">
+            
+            <div class="text-center mb-4">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 mb-2">
+                    <i class="fa-solid fa-circle-check text-amber-600"></i> 생성 완료
+                </span>
+                <h2 class="text-xl md:text-2xl font-bold text-slate-800">QR 코드가 생성되었습니다</h2>
+                <p class="text-xs md:text-sm text-slate-500 mt-1">QR 코드를 클릭하면 JPG 이미지로 바로 다운로드됩니다.</p>
+            </div>
+
+            <!-- QR Code Card Box -->
+            <div id="qrDownloadCard" 
+                 onclick="downloadQRCode()" 
+                 title="클릭하여 JPG로 다운로드"
+                 class="qr-hover-container cursor-pointer bg-white p-6 md:p-8 rounded-2xl shadow-xl border-2 border-amber-400/50 flex flex-col items-center relative group">
+                
+                <!-- QR Canvas Render Box -->
+                <div id="qrcode" class="p-2 bg-white rounded-lg flex items-center justify-center"></div>
+
+                <!-- Hover Overlay Hint -->
+                <div class="mt-4 flex items-center gap-2 text-amber-600 group-hover:text-amber-700 font-semibold text-sm">
+                    <i class="fa-solid fa-download animate-bounce"></i>
+                    <span>클릭하여 JPG 다운로드</span>
+                </div>
+            </div>
+
+            <!-- Download Button (Alternative Trigger) -->
+            <button onclick="downloadQRCode()" class="mt-4 text-xs font-medium text-slate-500 hover:text-amber-600 underline flex items-center gap-1 transition-colors">
+                <i class="fa-solid fa-file-arrow-down"></i> 이미지 다운로드가 안 되나요?
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Dynamic Input Form Container (Position shifts from Center to Bottom) -->
+    <section id="inputSection" class="smooth-transition w-full max-w-xl mx-auto px-4 pb-8 z-10 flex flex-col items-center">
+        
+        <!-- Helper Label (Visible when centered) -->
+        <div id="initialHeading" class="text-center mb-6 transition-opacity duration-300">
+            <h1 class="text-2xl md:text-4xl font-extrabold text-slate-900 mb-2 tracking-tight">
+                URL을 QR 코드로 즉시 변환해보세요
+            </h1>
+            <p class="text-sm md:text-base text-slate-500">
+                원하는 웹사이트 주소를 입력하고 확인 버튼을 누르세요.
+            </p>
+        </div>
+
+        <!-- URL Input Form -->
+        <form onsubmit="handleGenerateQR(event)" class="w-full bg-white p-2 md:p-3 rounded-2xl shadow-lg border border-slate-200/80 flex flex-col sm:flex-row gap-2">
+            <div class="relative flex-1 flex items-center">
+                <div class="absolute left-4 text-slate-400">
+                    <i class="fa-solid fa-link"></i>
+                </div>
+                <input type="text" 
+                       id="urlInput" 
+                       placeholder="https://example.com" 
+                       required
+                       class="w-full pl-11 pr-4 py-3 bg-transparent rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm md:text-base"
+                       autocomplete="off" />
+            </div>
+            
+            <button type="submit" 
+                    id="submitBtn"
+                    class="bg-[#FFC107] hover:bg-amber-400 active:bg-amber-500 text-slate-900 font-bold px-6 py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm md:text-base cursor-pointer">
+                <span>확인</span>
+                <i class="fa-solid fa-arrow-right text-xs"></i>
+            </button>
+        </form>
+
+        <!-- Notification Toast Box -->
+        <div id="toast" class="opacity-0 transition-opacity duration-300 text-xs text-rose-500 mt-2 font-medium"></div>
+    </section>
+
+    <script>
+        let qrInstance = null;
+
+        // Position Setup on Initial Load
+        window.addEventListener('DOMContentLoaded', () => {
+            alignInputToCenter();
+        });
+
+        // Align Input Section in exact Center initially
+        function alignInputToCenter() {
+            const inputSection = document.getElementById('inputSection');
+            const initialHeading = document.getElementById('initialHeading');
+            
+            // Transform position to center screen visually
+            inputSection.style.transform = 'translateY(-120px)';
+            initialHeading.style.opacity = '1';
+            initialHeading.style.display = 'block';
+        }
+
+        // Shift Input Section to Bottom Screen
+        function moveInputToBottom() {
+            const inputSection = document.getElementById('inputSection');
+            const initialHeading = document.getElementById('initialHeading');
+            
+            // Move down smoothly
+            inputSection.style.transform = 'translateY(0px)';
+            initialHeading.style.opacity = '0';
+            setTimeout(() => {
+                initialHeading.style.display = 'none';
+            }, 300);
+        }
+
+        // Handle URL Input & QR Generation
+        function handleGenerateQR(e) {
+            e.preventDefault();
+            
+            let url = document.getElementById('urlInput').value.trim();
+            const toast = document.getElementById('toast');
+
+            if (!url) {
+                toast.innerText = '올바른 URL을 입력해주세요.';
+                toast.classList.remove('opacity-0');
+                return;
+            }
+
+            // Auto prepending protocol if missing
+            if (!/^https?:\/\//i.test(url)) {
+                url = 'https://' + url;
+                document.getElementById('urlInput').value = url;
+            }
+
+            toast.classList.add('opacity-0');
+
+            // 1. Move URL Input form to Bottom
+            moveInputToBottom();
+
+            // 2. Generate QR Code
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = ''; // Clear previous
+
+            // Create fresh QR code instance
+            qrInstance = new QRCode(qrContainer, {
+                text: url,
+                width: 220,
+                height: 220,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            // 3. Show QR Container in exact screen center
+            setTimeout(() => {
+                const qrWrapper = document.getElementById('qrContainerWrapper');
+                qrWrapper.classList.remove('opacity-0', 'scale-90', 'pointer-events-none');
+                qrWrapper.classList.add('opacity-100', 'scale-100');
+            }, 200);
+        }
+
+        // Download Generated QR Code as JPG
+        function downloadQRCode() {
+            const qrCanvas = document.querySelector('#qrcode canvas');
+            const qrImg = document.querySelector('#qrcode img');
+
+            if (!qrCanvas && !qrImg) {
+                alert('다운로드할 QR 코드가 생성되지 않았습니다.');
+                return;
+            }
+
+            // Create offscreen canvas for JPG conversion with white background
+            const exportCanvas = document.createElement('canvas');
+            const ctx = exportCanvas.getContext('2d');
+            
+            const size = 300; // Output dimensions
+            const padding = 20;
+            
+            exportCanvas.width = size;
+            exportCanvas.height = size;
+
+            // Fill white background for JPG standard format
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, size, size);
+
+            // Helper function to finalize download
+            const triggerDownload = (sourceImage) => {
+                ctx.drawImage(sourceImage, padding, padding, size - padding * 2, size - padding * 2);
+                
+                // Convert to JPG Data URL
+                const jpgUrl = exportCanvas.toDataURL('image/jpeg', 0.95);
+                
+                // Trigger file download
+                const link = document.createElement('a');
+                link.href = jpgUrl;
+                link.download = 'qr_code.jpg';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            if (qrCanvas) {
+                triggerDownload(qrCanvas);
+            } else if (qrImg) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => triggerDownload(img);
+                img.src = qrImg.src;
+            }
+        }
+
+        // Reset page view when clicking header logo
+        function resetView(e) {
+            e.preventDefault();
+            document.getElementById('urlInput').value = '';
+            
+            const qrWrapper = document.getElementById('qrContainerWrapper');
+            qrWrapper.classList.add('opacity-0', 'scale-90', 'pointer-events-none');
+            qrWrapper.classList.remove('opacity-100', 'scale-100');
+            
+            alignInputToCenter();
+        }
+    </script>
+</body>
+</html>
