@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL2QR - 실시간 QR코드 생성기 (API 기반)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brandYellow: '#FFC800',
+            brandDark: '#1E1E1E',
+            brandGray: '#F4F6F9',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', sans-serif;
+    }
+    .custom-shadow {
+      box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.08), 0 5px 15px -5px rgba(0, 0, 0, 0.04);
+    }
+    .pulse-glow {
+      animation: pulseGlow 2s infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 200, 0, 0.4); }
+      50% { box-shadow: 0 0 0 12px rgba(255, 200, 0, 0); }
+    }
+  </style>
+</head>
+<body class="bg-brandGray min-h-screen flex items-center justify-center p-4 sm:p-6 text-slate-800">
+
+  <div class="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 custom-shadow border border-slate-100 flex flex-col items-center">
+    
+    <!-- Header / Logo Area -->
+    <div class="mb-6 text-center w-full">
+      <div class="inline-block p-2 rounded-2xl bg-slate-50 border border-slate-100 mb-2">
+        <img src="img/logo.png" alt="URL2QR 로고" class="h-12 mx-auto object-contain" 
+             onerror="this.onerror=null; this.outerHTML='<div class=\'bg-brandYellow text-slate-900 font-extrabold text-2xl tracking-widest px-6 py-2 rounded-xl shadow-sm border-2 border-slate-900 inline-block\'>URL2QR</div>';">
+      </div>
+      <p class="text-xs font-semibold text-slate-400 mt-2 uppercase tracking-wider">Fast & Easy URL to QR Code Converter</p>
+    </div>
+
+    <!-- Input Form Block -->
+    <div class="w-full space-y-4">
+      <div>
+        <label for="url-input" class="block text-xs font-bold text-slate-600 mb-1.5 uppercase tracking-wide">
+          <i class="fa-solid font-bold fa-link text-brandYellow mr-1"></i> 변환할 URL 주소 입력
+        </label>
+        <div class="relative flex items-center">
+          <input type="text" id="url-input" placeholder="https://example.com" 
+                 class="w-full pl-4 pr-10 py-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-brandYellow focus:bg-white transition-all duration-200"
+                 onkeypress="handleKeyPress(event)">
+          <button type="button" onclick="clearInput()" id="clear-btn" class="hidden absolute right-3 text-slate-400 hover:text-slate-600 p-1">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <button onclick="generateQRCode()" id="gen-btn"
+              class="w-full bg-brandDark hover:bg-slate-800 active:scale-[0.98] text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2">
+        <i class="fa-solid fa-qrcode text-brandYellow"></i>
+        <span>QR코드 바로 생성</span>
+      </button>
+    </div>
+
+    <!-- Toast / Notification Box -->
+    <div id="toast" class="hidden w-full mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl text-center font-medium">
+      <i class="fa-solid fa-triangle-exclamation mr-1"></i> <span id="toast-msg">올바른 URL을 입력해주세요.</span>
+    </div>
+
+    <!-- Result Area -->
+    <div id="qr-result" class="hidden w-full mt-6 pt-6 border-t border-slate-100 flex-col items-center animate-fade-in">
+      
+      <!-- QR Image Container -->
+      <div class="relative group p-4 bg-white border-2 border-slate-100 rounded-2xl shadow-inner mb-4 flex items-center justify-center min-h-[220px] w-full max-w-[240px]">
+        
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden flex-col items-center text-slate-400 space-y-2">
+          <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brandYellow"></i>
+          <span class="text-xs font-semibold">API에서 QR 생성 중...</span>
+        </div>
+
+        <!-- QR Display Image -->
+        <img id="qr-image" src="" alt="생성된 QR 코드" class="w-48 h-48 rounded-lg shadow-sm hidden" onload="onQRImageLoaded()" onerror="onQRImageError()">
+      </div>
+
+      <!-- Live Scan Information -->
+      <div class="w-full bg-slate-50 p-3 rounded-xl border border-slate-200/60 mb-4 text-center">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wide block mb-1">연결될 Target URL</span>
+        <a id="target-link" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-blue-600 hover:underline break-all inline-flex items-center gap-1 justify-center">
+          <span id="target-url-text">-</span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
+      </div>
+
+      <!-- Download & Action Buttons -->
+      <div class="w-full grid grid-cols-2 gap-3">
+        <a id="test-link-btn" href="#" target="_blank"
+           class="w-full bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold py-3 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150">
+          <i class="fa-solid fa-compass text-slate-500"></i>
+          <span>링크 바로가기</span>
+        </a>
+
+        <button onclick="downloadQRCode()" id="download-btn"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-3 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all duration-150">
+          <i class="fa-solid fa-download"></i>
+          <span>PNG 다운로드</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-6 pt-4 text-center text-[11px] text-slate-400">
+      <p>API 기반 고화질 QR코드 생성기 &copy; URL2QR</p>
+    </div>
+
+  </div>
+
+  <script>
+    const urlInput = document.getElementById('url-input');
+    const clearBtn = document.getElementById('clear-btn');
+    const genBtn = document.getElementById('gen-btn');
+    const qrResult = document.getElementById('qr-result');
+    const qrImage = document.getElementById('qr-image');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const targetLink = document.getElementById('target-link');
+    const targetUrlText = document.getElementById('target-url-text');
+    const testLinkBtn = document.getElementById('test-link-btn');
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toast-msg');
+
+    let currentFormattedURL = "";
+
+    // Show/Hide Clear button on input
+    urlInput.addEventListener('input', () => {
+      if (urlInput.value.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      hideToast();
+    });
+
+    function clearInput() {
+      urlInput.value = '';
+      clearBtn.classList.add('hidden');
+      urlInput.focus();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') {
+        generateQRCode();
+      }
+    }
+
+    function showToast(message) {
+      toastMsg.textContent = message;
+      toast.classList.remove('hidden');
+    }
+
+    function hideToast() {
+      toast.classList.add('hidden');
+    }
+
+    // Auto-fix URL with https:// if missing
+    function formatURL(input) {
+      let trimmed = input.trim();
+      if (!trimmed) return "";
+      
+      // If it doesn't start with http:// or https://, prepend https://
+      if (!/^https?:\/\//i.test(trimmed)) {
+        trimmed = "https://" + trimmed;
+      }
+      return trimmed;
+    }
+
+    function generateQRCode() {
+      const rawValue = urlInput.value;
+      if (!rawValue.trim()) {
+        showToast('URL 주소를 입력해주세요.');
+        urlInput.focus();
+        return;
+      }
+
+      const formattedURL = formatURL(rawValue);
+      currentFormattedURL = formattedURL;
+
+      // Basic URL validity check
+      try {
+        new URL(formattedURL);
+      } catch (_) {
+        showToast('유효하지 않은 URL 형식입니다.');
+        return;
+      }
+
+      hideToast();
+
+      // Show Result Block & Loading State
+      qrResult.classList.remove('hidden');
+      qrResult.classList.add('flex');
+      qrImage.classList.add('hidden');
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+
+      // Set target links
+      targetUrlText.textContent = formattedURL;
+      targetLink.href = formattedURL;
+      testLinkBtn.href = formattedURL;
+
+      // Encode URL for QR Code Server API
+      const encodedURL = encodeURIComponent(formattedURL);
+      // Using qrserver.com API for reliable 300x300 high resolution QR code
+      const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodedURL}`;
+
+      // Set Image Source
+      qrImage.src = apiUrl;
+    }
+
+    function onQRImageLoaded() {
+      loadingSpinner.classList.remove('flex');
+      loadingSpinner.classList.add('hidden');
+      qrImage.classList.remove('hidden');
+    }
+
+    function onQRImageError() {
+      loadingSpinner.classList.remove('flex');
+      loadingSpinner.classList.add('hidden');
+      showToast('QR코드를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    async function downloadQRCode() {
+      if (!qrImage.src || qrImage.classList.contains('hidden')) {
+        showToast('먼저 QR코드를 생성해주세요.');
+        return;
+      }
+
+      try {
+        // Fetch image directly as Blob to handle file download without CORS issues
+        const response = await fetch(qrImage.src);
+        const blob = await response.blob();
+        
+        // Create temporary blob URL
+        const blobUrl = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = blobUrl;
+        
+        // Extract domain name for friendly file name
+        let filename = 'qrcode';
+        try {
+          const parsed = new URL(currentFormattedURL);
+          filename = `qr_${parsed.hostname.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        } catch(e) {}
+        
+        downloadAnchor.download = `${filename}.png`;
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        document.body.removeChild(downloadAnchor);
+        
+        // Clean up blob URL
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } catch (err) {
+        console.error('Blob download failed, falling back to window open', err);
+        // Fallback method
+        window.open(qrImage.src, '_blank');
+      }
+    }
+  </script>
+</body>
+</html>
